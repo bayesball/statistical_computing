@@ -1,0 +1,91 @@
+---
+title: "Gamma Sampling Posterior"
+output: html_document
+---
+
+Suppose $y_1, ..., y_n$ are a random sample from a Gamma density with shape $\alpha$ and rate $\beta$.
+
+$$
+f(y | \alpha, \beta) = \frac{1}{\Gamma(\alpha)}
+\beta^\alpha y^{\alpha - 1} \exp(-\beta y)
+$$
+
+If we assign $(\alpha, \beta)$ a uniform prior, then the posterior density is given by
+$$
+g(\alpha, \beta | y) \propto \prod_{j=1}^n f(y_j | \alpha, \beta)
+$$
+We explore different methods for sampling from this posterior density.
+
+I'm going to turn off warnings in R (not usually a good idea) so I get a reasonable output.
+
+
+First, we define the log posterior, define the data vector, and show a contour plot of the joint density.
+
+```{r}
+gamma.post1 <- function(theta, y){
+  options(warn=-1)
+  v <- sum(dgamma(y, shape=theta[1], rate=theta[2], log=TRUE)) 
+  ifelse(is.na(v), -1e15, v)
+}
+y <- c(0.7, 1.5, 2.1, 2.0, 1.8, 1.1, 0.5, 0.8, 1.0, 2.1, 
+       1.7, 1.8, 0.5, 0.7, 1.2, 1.8, 1.0, 0.8, 2.6, 2.4)
+library(LearnBayes)
+mycontour(gamma.post1, c(0.1, 13, 0.1, 13), y,
+          xlab="SHAPE", ylab="RATE",
+          main="GAMMA(SHAPE, RATE) POSTERIOR")
+```
+
+## Metropolis-Hastings Independence Chain
+
+Have to find a suitable proposal density.  Find an approximate normal density using the laplace function in the LearnBayes package.
+
+```{r}
+fit <- laplace(gamma.post1, c(4, 2), y)
+fit$mode
+fit$var
+```
+
+Based on this output we see that approximately 
+$\theta = (\alpha, \beta) \approx N(\hat \theta, V)$
+
+We use this approximation as a proposal density:
+
+```{r}
+fit2 <- indepmetrop(gamma.post1, 
+                    proposal=list(mu=fit$mode, var= fit$var),
+                    start=c(4, 2),
+                    m=5000, 
+                    y)
+```
+
+Display the simulated drwas and construct plots of simulated draws.
+
+```{r}
+fit2$accept
+plot(mcmc(fit2$par))
+```
+
+## Metropolis-Hastings Random Walk Chain
+
+Next try a random walk algorithm using the approximate variance-covariance matrix and a scale factor of 2.
+
+```{r}
+fit3 <- rwmetrop(gamma.post1, 
+                    proposal=list(var= fit$var, scale=2),
+                    start=c(4, 2),
+                    m=5000, 
+                    y)
+fit3$accept
+plot(mcmc(fit3$par))
+```
+
+## Metropolis-Within-Gibbs Sampling
+
+Last, try a Metropolis-within-Gibbs sampler using scale parameter of 0.5 and 0.5.
+
+```{r}
+fit4 <- gibbs(gamma.post1, c(10, 1), 1000, c(0.5, 0.5), y)
+fit4$accept
+plot(mcmc(fit4$par))
+```
+

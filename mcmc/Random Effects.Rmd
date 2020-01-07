@@ -1,0 +1,113 @@
+---
+title: "MCMC - Random Effects Example"
+output: html_document
+---
+
+Here is a Bayesian random effects model:
+
+1.  We observe $y_1, ..., y_N$, where $y_i \sim$ Binomial($n_i, p_i$).
+
+2.  We assume $p_1, ..., p_N$ come from a $Beta(a, b)$ distribution where $a$ and $b$ are unknown.
+
+For convenience we assume that we know the values of the Beta mean $\eta = a / (a + b)$ and want to learn about the Beta "precision" $K = a + b$.
+
+3.  We assign $K$ the prior
+$$
+g(K) = \frac{1}{(1 + K)^2}, K > 0.
+$$
+
+We will transform $K$ to $\theta =  \log K$.  Then the posterior density can be shown equal to
+$$
+g(\theta | y) \propto \frac{\exp(\theta)}{(1 + \exp(\theta))^2} \prod_{j=1}^N \frac{B(a + y_j, b + n_j - y_j)}{B(a, b)},
+$$
+where $a = K \eta$ and $b = K (1 - \eta)$.
+
+The function reff.model programs the logarithm of the posterior density of $\theta$.
+
+```{r}
+reff.model <- function (theta, data){
+    eta <- 0.30
+    a <- exp(theta) * eta
+    b <- exp(theta) * (1 - eta)
+    y <- data[, 1]
+    n <- data[, 2]
+    logf <- function(y, n, a, b) 
+      lbeta(a + y, b + n - y) - lbeta(a, b)
+    sum(logf(y, n, a, b)) + theta -
+      2 * log(1 + exp(theta))
+}
+```
+
+The matrix d contains the data -- first column are the values of $y$ and the second column contain the sample sizes $n$.  (These are actually the 3-point shooting statistics for the BGSU women's basketball team for the 2014-15 season.)
+
+```{r}
+d <- matrix(c(51, 154,
+              30, 96,
+              45, 128,
+              19, 72,
+              28, 92,
+              16, 42,
+              4, 19), 7, 2, byrow=TRUE)
+```
+
+Here is a plot of the posterior density:
+
+```{r}
+theta <- seq(0, 12, length=200)
+plot(theta, exp(sapply(theta, reff.model, d)), type="l",
+     ylab="Density", main="Posterior Density")
+```
+
+To get an approximation to the scale of the posterior, I use the laplace function in the LearnBayes package.
+
+```{r}
+library(LearnBayes)
+fit <- laplace(reff.model, 2, d)
+c(fit$mode, fit$var)
+```
+
+## Independence Chain
+
+The function indepmetrop implements a M-H independence algorithm using a normal proposal density.  The inputs are the definition of the log posterior, the proposal (estimated mean and variance), starting value, number of iterations, and the data used in the log posterior function.
+
+```{r}
+I <- indepmetrop(reff.model,
+                 proposal=list(mu=5, var=2),
+                 start=1,
+                 m=5000,
+                 d)
+```
+
+Acceptance rate?
+
+```{r}
+I$accept
+```
+
+Here is a plot of the simulated values (a trace plot and a density plot).
+
+```{r}
+library(coda)
+plot(mcmc(I$par), main="log K")
+```
+
+## Random Walk Chain
+
+The function rwmetrop implements the M-H random walk algorithm.  The inputs are the definition of the log posterior, a proposal which is a list of the var-cov matrix and a scale parameter, the starting value, how many simulated values to draw, and the data used in the definition of the log posterior.
+
+```{r}
+S <- rwmetrop(reff.model, 
+              proposal=list(var=fit$var, scale=4),
+              start=2,
+              m=5000,
+              d)
+```
+
+Here is the acceptance rate and plots.
+
+```{r}
+S$accept
+plot(mcmc(S$par), main="log K")
+```
+
+

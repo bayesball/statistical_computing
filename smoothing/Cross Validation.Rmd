@@ -1,0 +1,58 @@
+---
+title: "Cross Validation"
+output: html_document
+---
+
+## Cross-validation with polynomial regression
+
+The function polyfit computes cross-validation criteria fitting polynomial of particular degree.  The arguments are the degree of the polynomial and the dataset.
+
+```{r}
+polyfit <- function(degree, d){
+  fit.minus.i <- function(i, d, degree){
+      fit <- lm(y ~ poly(x, degree), data=d[-i, ])
+      predict(fit, data.frame(x=d$x[i]))
+  }
+  predictions <- sapply(1:dim(d)[1],
+                        fit.minus.i, d, degree)
+  sum((d$y - predictions) ^ 2) 
+}
+```
+
+
+
+We illustrate on some baseball data from LearnBayes package.  We are interested in how the number of home runs of Sammy Sosa changes as a function of his age.
+
+
+```{r}
+library(LearnBayes)
+sosa <- subset(sluggerdata, Player=="Sosa")[, c("Age", "HR")]
+names(sosa) <- c("x", "y")
+with(sosa, plot(x, y))
+```
+
+
+
+We show fitted polynomials up to degree 5 on the scatterplot.
+
+```{r}
+with(sosa, plot(x, y,
+                xlab="AGE", ylab="HOME RUNS",
+                main="Fitting polynomials up to degree 5"))
+for(j in 1:5)
+  lines(sosa$x,
+        predict(lm(y ~ poly(x, j), data=sosa)))
+```
+
+
+We compute cross-validation criterion for degrees 1 through 5.  This shows clearly that the best degree fit is 3.
+
+```{r}
+S <- sapply(1:5, polyfit, sosa)
+names(S) <- paste("degree", 1:5)
+S
+```
+
+
+
+

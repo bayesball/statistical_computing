@@ -1,0 +1,74 @@
+---
+title: "Random Walk Chain"
+output: html_document
+---
+
+Back to Example 7.2, Section 7.1.1
+
+Suppose we observe $y_1, ..., y_n$ from the mixture density
+$$
+f(y | \delta) = \delta N(7, 0.5^2) + (1 - \delta) N(10, 0.5^2)
+$$
+We assume a uniform prior for $\delta$.  Then the posterior density is proportional to
+$$
+g(\delta) \propto \prod_{j=1}^n f(y_j | \delta).
+$$
+
+We'd like to use a random walk M-H chain to simulate a sample from the posterior.
+
+First generate some data from mixture distribution and plot the data.
+
+```{r}
+n <- 20
+delta <- 0.7
+set.seed(1234)
+y <- ifelse(runif(n) < delta, 
+            rnorm(n, 7, 0.5),
+            rnorm(n, 10, 0.5))
+library(MASS)
+truehist(y, 20, main="Histogram of observed data")
+```
+
+We define and graph the log posterior for of the transformed parameter $\theta = \log\left(\frac{\delta}{1-\delta}\right)$
+
+```{r}
+logpost = function(theta, y) {
+  delta <- exp(theta) / (1 + exp(theta))
+  sum(log(delta * dnorm(y, 7, 0.5) +
+            (1 - delta) * dnorm(y, 10, 0.5))) + theta -
+            2 * log(1 + exp(theta))
+}
+theta <- seq(-1, 5, by=0.01)
+plot(theta, exp(sapply(theta, logpost, y)), type="l",
+     ylab="Density", main="Graph of Posterior of theta")
+```
+
+Illustrate several choices for scale parameter of random walk algorithm.  (I am using the function rwmetrop in the LearnBayes package to do the sampling.)
+
+First, I use a scale parameter of 0.05 and run the random walk algorithm for 10,000 iterations.  I'll output the acceptance rate and construct a trace plot and a density plot of the simulated draws.
+
+```{r}
+library(LearnBayes)
+scale.value <- 0.05
+out1 <- rwmetrop(logpost, 
+                 list(var=1, scale=scale.value),
+                 start=0,
+                 m=10000,
+                 y)
+out1$accept
+plot(mcmc(out1$par), main=paste("Scale =", scale.value))
+```
+
+Repeat this for 10,000 iterations using a scale parameter of 2.
+
+```{r}
+scale.value <- 2.0
+out2 <- rwmetrop(logpost, 
+                 list(var=1, scale=scale.value),
+                 start=0,
+                 m=10000,
+                 y)
+out2$accept
+plot(mcmc(out2$par), main=paste("Scale =", scale.value))
+```
+
